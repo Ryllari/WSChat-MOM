@@ -1,5 +1,7 @@
 import CosNaming
+import json
 import os
+import pika
 import sys
 import threading
 import Tkinter as tk
@@ -7,13 +9,21 @@ import Tkinter as tk
 from client import ClientServer
 from datetime import datetime
 from omniORB import CORBA, PortableServer
+from tkSimpleDialog import *
 from utils import *
 
-from tkSimpleDialog import *
-
+# Define root to DialogBox (UI)
 chat_ui = tk.Tk()
 chat_ui.geometry("5x5")
 
+name_ok = False
+while(not name_ok):
+    username = askstring("BEM-VINDO AO CHAT", "Como iremos te chamar?", parent=chat_ui)
+    if username:
+        name_server = username
+        name_ok = True
+
+###### ORB SETTINGS
 def run_orb():
     global orb
     orb.run()
@@ -34,25 +44,18 @@ if rootContext is None:
     print("Failed to narrow the root naming context")
     sys.exit(1)
 
-name_ok = False
-while(not name_ok):
-    username = askstring("BEM-VINDO AO CHAT", "Como iremos te chamar?", parent=chat_ui)
-    if username:
-        name_server = username
-        name_ok = True
-
 # Bind context to the root context
 try:
     name = [CosNaming.NameComponent(name_server, "context")]
     context = rootContext.bind_new_context(name)
-    print "Ola, {}!".format(name_server)
+    print("Oi, {}!".format(name_server))
 
 except CosNaming.NamingContext.AlreadyBound, ex:
     obj = rootContext.resolve(name)
     context = obj._narrow(CosNaming.NamingContext)
     
     if context is None:
-        print "Algo deu errado na conexao"
+        print("Algo deu errado na conexao")
         sys.exit(1)
     
 # Bind the object to the context
@@ -67,10 +70,17 @@ except CosNaming.NamingContext.AlreadyBound:
 poaManager = poa._get_the_POAManager()
 poaManager.activate()
 
+# START ORB
 t1 = threading.Thread(target=run_orb)
 t1.daemon = True
 t1.start()
 
+# MOM 
+connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+channel = connection.channel()
+channel.queue_declare(queue=username)
+
+# DEFINE SYSTEMS VAR
 server = connect_to_server('Server')
 status = server.connect_user(username)
 diff_status = STATUS_OFF if status == STATUS_ON else STATUS_ON
@@ -131,7 +141,15 @@ while running:
                                 eo.receive_msg(friend, timestamp, send_msg, username)
                             else:
                                 # FAZER INTEGRACAO COM RABBITMQ
-                                pass
+                                queue_msg = {'username': username, 'timestamp': timestamp, 'send_msg': send_msg}
+                                channel.queue_declare(queue=friend)
+                                channel.basic_publish(
+                                    exchange='',
+                                    routing_key=friend,
+                                    body=json.dumps(queue_msg),
+                                    # properties=pika.BasicProperties(delivery_mode=2,) # persistent
+                                )
+                                eo.receive_msg(friend, timestamp, send_msg, username)
                         else:
                             in_chat = False
                 else:
@@ -143,10 +161,29 @@ while running:
         server.change_user_status(username, diff_status)
         status, diff_status = diff_status, status
         print("Status atual: {}".format(LIST_STATUS[status]))
+        if status == STATUS_ON:
+            res = channel.queue_declare(username, passive=True)
+            msg_count = res.method.message_count             
+            if msg_count > 0:
+                channel.start_consuming()
+                for method_frame, prop, body in channel.consume(username):
+                    try:
+                        msgj = json.loads(body)
+                        eo.receive_msg(
+                            msgj['username'].encode('ascii','ignore'),
+                            msgj['timestamp'].encode('ascii','ignore'),
+                            msgj['send_msg'].encode('ascii','ignore'),
+                            ''
+                        )
+                    except:
+                        pass
+                channel.stop_consuming()
+            print("Voce tem {} novas mensagens".format(msg_count))
 
     elif option == "0":
         print("Tchau!")
         server.change_user_status(username, STATUS_OFF)
+        connection.close()
         running = False
         sys.exit(1)
     
