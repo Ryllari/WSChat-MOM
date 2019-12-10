@@ -1,12 +1,32 @@
 import CosNaming, Server, Server__POA
+import pika
 import sys
+import threading
 
 from omniORB import CORBA, PortableServer
+from SOAPpy import SOAPServer
 from utils import *
 
 
 name_server = 'Server'
 
+connection = pika.BlockingConnection(pika.ConnectionParameters(host = 'localhost'))
+channel = connection.channel()
+ws_server = SOAPServer(('localhost', 8081))
+
+def create_queue(username):
+    channel.queue_declare(queue=username)
+
+ws_server.registerFunction(create_queue)
+
+def server_run():
+    global ws_server
+    ws_server.serve_forever()
+
+# Executa o WS
+start_ws = threading.Thread(target=server_run)
+start_ws.daemon = True
+start_ws.start()
 
 class CentralServer(Server__POA.CentralServer):
     users_list = {}
