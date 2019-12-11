@@ -85,6 +85,26 @@ server = connect_to_server('Server')
 status = server.connect_user(username)
 diff_status = STATUS_OFF if status == STATUS_ON else STATUS_ON
 
+res = channel.queue_declare(username, passive=True)
+msg_count = res.method.message_count
+count = 0             
+while(count < msg_count):
+    channel.start_consuming()
+    for method_frame, prop, body in channel.consume(username):
+        try:
+            msgj = json.loads(body)
+            eo.receive_msg(
+                msgj['username'].encode('ascii','ignore'),
+                msgj['timestamp'].encode('ascii','ignore'),
+                msgj['send_msg'].encode('ascii','ignore'),
+                ''
+            )
+        except:
+            continue
+        channel.stop_consuming()
+    count += 1
+raw_input("Voce tem {} novas mensagens!\n Pressione qualquer tecla para continuar...".format(msg_count))
+
 running = True
 while running:
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -130,10 +150,9 @@ while running:
                         print("\n****** {} *******\n".format(friend))
                         
                         eo.show_chat(friend)              
-                        msg_option = raw_input("\nDigite sua mensagem para {}".format(friend))
+                        msg_option = raw_input("\nDigite sua mensagem para {}: ".format(friend))
                         if msg_option != "":
                             send_msg = msg_option
-                            # send_msg = askstring("CHAT", "Digite sua mensagem para {}".format(friend), parent=chat_ui)
                             timestamp = datetime.now().strftime("%Y/%m/%d - %H:%M:%S")
                             if server.get_user_status(friend) == STATUS_ON:
                                 friend_server = connect_to_client(friend)
@@ -147,7 +166,6 @@ while running:
                                     exchange='',
                                     routing_key=friend,
                                     body=json.dumps(queue_msg),
-                                    # properties=pika.BasicProperties(delivery_mode=2,) # persistent
                                 )
                                 eo.receive_msg(friend, timestamp, send_msg, username)
                         else:
@@ -163,8 +181,9 @@ while running:
         print("Status atual: {}".format(LIST_STATUS[status]))
         if status == STATUS_ON:
             res = channel.queue_declare(username, passive=True)
-            msg_count = res.method.message_count             
-            if msg_count > 0:
+            msg_count = res.method.message_count
+            count = 0             
+            while(count < msg_count):
                 channel.start_consuming()
                 for method_frame, prop, body in channel.consume(username):
                     try:
@@ -176,8 +195,9 @@ while running:
                             ''
                         )
                     except:
-                        pass
-                channel.stop_consuming()
+                        continue
+                    channel.stop_consuming()
+                count += 1
             print("Voce tem {} novas mensagens".format(msg_count))
 
     elif option == "0":
