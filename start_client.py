@@ -135,7 +135,7 @@ while running:
             print("{} - {} mensagens".format(user, eo.get_msg_count(user)))
         
         print("\n\n- Para CONVERSAR COM ALGUM AMIGO, digite + e pressione Enter")
-        print("- Para voltar ao MENU pressione Enter")
+        print("- Para voltar ao MENU pressione qualquer tecla e Enter")
         chat_option = raw_input("\nO que deseja? ")
         if chat_option == "+":
             if status == STATUS_ON:
@@ -144,7 +144,7 @@ while running:
                     in_chat = True
                     while(in_chat):
                         os.system('cls' if os.name == 'nt' else 'clear')
-                        print("\n\n- Para ENVIAR MENSAGEM, digite + e pressione Enter")
+                        print("\n\n- Para ENVIAR MENSAGEM, digite a mensagem e pressione Enter")
                         print("- Para voltar ao MENU PRINCIPAL pressione Enter")
 
                         print("\n****** {} *******\n".format(friend))
